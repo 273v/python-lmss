@@ -5,7 +5,16 @@
 
 ### What is the Legal Matter Standard Specification (LMSS)?
 
+The LMSS is a taxonomy/ontology of over 10,000 law-focused tags/nodes, as well as relationships/edges between those tags/nodes.  Each tag/node has a unique identifier (IRI). That identifier is being used — and standardized — by three stakeholder groups:
+ * **Vendors** (e.g., Thomson Reuters, LexisNexis, Fastcase, Docket Alarm, NetDocuments, iManage, and many others)
+ * **Providers/Firms** (e.g., DLA Piper, Clifford Chance, Perkins Coie, Crowell, Fredrikson & Byron, and many others)
+ * **Corporate Law Departments** (e.g., Microsoft, Intel)
+
+The end result: LMSS permits those stakeholders (vendors, firms, corporate law departments) to increase interoperability, fuel AI, and produce better outcomes.
+
+
 ### What is Standards Advancement for the Legal Industry (SALI)?
+SALI is the nonprofit consortium of Vendors, Providers (e.g., firms), and Clients — all quickly and broadly moving towards standardizing with SALI tags (LMSS). Those 10,000+ tags serve as the industry’s common language, improving outcomes and value. And they are used in conjunction with the SALI API, where all stakeholders can transfer data using a standardized API protocol — leveraging SALI tags/nodes/identifiers. (edited) 
 
 
 ### Installation
