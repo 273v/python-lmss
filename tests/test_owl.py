@@ -1,5 +1,8 @@
 """test_owl.py: Tests for the lmss.owl module."""
 
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2023 273 Ventures, LLC
+
 # imports
 from pathlib import Path
 
@@ -117,3 +120,19 @@ def test_export_concepts_csv():
 
     # remove the file
     Path("test.csv").unlink()
+
+
+# test that we can export the list to JSON
+def test_export_concepts_json():
+    """Test that we can export the list of concepts to JSON."""
+    # load it
+    concepts = lmss.owl.get_concepts()
+
+    # export it
+    lmss.owl.export_concepts(concepts, output_file="test.json", output_format="json")
+
+    # check that the file exists
+    assert Path("test.json").exists()
+
+    # remove the file
+    Path("test.json").unlink()
