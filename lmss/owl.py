@@ -6,6 +6,9 @@
 
 For a more efficient, higher-level OOP interface, see the lmss.graph module."""
 
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2023 273 Ventures, LLC
+
 # imports
 import csv
 import json
@@ -31,6 +34,7 @@ NSMAP = {
     "skos": "http://www.w3.org/2004/02/skos/core#",
     "oboInOwl": "http://www.geneontology.org/formats/oboInOwl#",
 }
+
 
 def get_lmss_owl(
     branch: str = DEFAULT_REPO_BRANCH,
@@ -135,7 +139,9 @@ def get_concepts(
     # iterate over the concepts
     for concept in concepts:
         # get the IRI
-        iri = concept.attrib.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about", None)
+        iri = concept.attrib.get(
+            "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about", None
+        )
 
         # get the label
         label_element = concept.xpath("rdfs:label", namespaces=NSMAP)
@@ -143,7 +149,6 @@ def get_concepts(
             label = label_element[0].text
         else:
             label = None
-
 
         # get the altLabels
         alt_labels = [
@@ -166,14 +171,15 @@ def get_concepts(
 
         # get the list of subclass parents from <rdfs:subClassOf rdf:resource=
         subclass_list = [
-            subclass.attrib.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource", None)
+            subclass.attrib.get(
+                "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource", None
+            )
             for subclass in concept.xpath("rdfs:subClassOf", namespaces=NSMAP)
         ]
 
         # get the comments
         comments = [
-            comment.text
-            for comment in concept.xpath("rdfs:comment", namespaces=NSMAP)
+            comment.text for comment in concept.xpath("rdfs:comment", namespaces=NSMAP)
         ]
 
         # update the concept
@@ -186,12 +192,12 @@ def get_concepts(
                 "subclass_list": subclass_list,
                 "definition": definition,
                 "comments": comments,
-
             }
         )
 
     # return the concepts
     return concept_data
+
 
 def export_concepts(
     concepts: list[dict] | None = None,
@@ -237,40 +243,46 @@ def export_concepts(
         # export the concepts
         if output_file:
             # open the output file
-            with open(output_file, "w") as f:
+            with open(output_file, "wt", encoding="utf-8") as csv_file:
                 # setup the writer to join lists
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
 
                 # write the header
                 writer.writeheader()
 
                 # write the concepts
                 writer.writerows(concepts)
-        else:
-            # setup the writer
-            writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
-
-            # write the header
-            writer.writeheader()
-
-            # write the concepts
-            writer.writerows(concepts)
 
             # return success
             return True
-    elif output_format == "json":
+
+        # setup the writer
+        writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
+
+        # write the header
+        writer.writeheader()
+
+        # write the concepts
+        writer.writerows(concepts)
+
+        # return success
+        return True
+
+    if output_format == "json":
         # export the concepts
         if output_file:
             # open the output file
-            with open(output_file, "w") as f:
+            with open(output_file, "wt", encoding="utf-8") as json_file:
                 # write the concepts
-                json.dump(concepts, f, indent=2)
-        else:
-            # write the concepts
-            json.dump(concepts, sys.stdout, indent=2)
+                json.dump(concepts, json_file, indent=2)
 
-            # return success
             return True
-    else:
-        # invalid format
-        raise ValueError(f"Invalid output format: {output_format}")
+
+        # write the concepts
+        json.dump(concepts, sys.stdout, indent=2)
+
+        # return success
+        return True
+
+    # invalid format
+    raise ValueError(f"Invalid output format: {output_format}")
