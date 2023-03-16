@@ -174,10 +174,12 @@ class LMSSGraph(rdflib.Graph):
             ]
 
             # get direct parents
-            parents = [str(parent) for parent in self.objects(concept, RDFS.subClassOf)]
+            parents = [str(parent) for parent in self.objects(concept, RDFS.subClassOf)
+                       if str(parent).startswith("http://lmss.sali.org/")]
 
             # get direct children
-            children = [str(child) for child in self.subjects(RDFS.subClassOf, concept)]
+            children = [str(child) for child in self.subjects(RDFS.subClassOf, concept)
+                        if str(child).startswith("http://lmss.sali.org/")]
 
             # build the dictionary to store the concept
             self.concepts[iri] = {

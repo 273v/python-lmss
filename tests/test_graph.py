@@ -69,3 +69,13 @@ def test_graph_search_definitions():
                                             concept_type=lmss_graph.key_concepts["Area of Law"],
                                             concept_depth=1)
     assert results[0]["label"] != "Admiralty and Maritime Law"
+
+
+def test_graph_parents():
+    lmss_graph = LMSSGraph()
+
+    iri = lmss_graph.label_to_iri["Education Law"][0]
+
+    assert lmss_graph.concepts[iri]["parents"] == [
+        "http://lmss.sali.org/RSYBzf149Mi5KE0YtmpUmr"
+      ]
