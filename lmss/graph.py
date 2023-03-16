@@ -618,7 +618,7 @@ class LMSSGraph(rdflib.Graph):
                     min(
                         rapidfuzz.fuzz.partial_token_set_ratio(
                             search_term.lower(), definition.lower()
-                        )
+                        ) / 100.
                         for definition in concept["definitions"]
                     )
                     if len(concept["definitions"]) > 0
