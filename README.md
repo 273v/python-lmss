@@ -88,6 +88,7 @@ http://lmss.sali.org/R7KYATnZcNxJsZ1MQBADZ0x -> Water Resources and Wetlands Law
 ```
 
 ### Versions
+ * `0.1.1`, 2021-03-16: Minor fixes and enhancements to support Suggester API and new LMSS develop version
  * `0.1.0`, 2023-03-15: Initial public release to support Suggester API release on Docker Hub
 
 ## License
