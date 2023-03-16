@@ -119,6 +119,7 @@ class LMSSGraph(rdflib.Graph):
             "Forums and Venues": "http://lmss.sali.org/RBjHwNNG2ASVmasLFU42otk",
             "Governmental Body": "http://lmss.sali.org/RBQGborh1CfXanGZipDL0Qo",
             "Industry": "http://lmss.sali.org/RDIwFaFcH4KY0gwEY0QlMTp",
+            "Language": "http://lmss.sali.org/RDOvAHsvY8TKJ1O1orXPM9o",
             "LMSS Type": "http://lmss.sali.org/R8uI6AZ9vSgpAdKmfGZKfTZ",
             "Legal Authorities": "http://lmss.sali.org/RC1CZydjfH8oiM4W3rCkma3",
             "Legal Entity": "http://lmss.sali.org/R7L5eLIzH0CpOUE74uJvSjL",
@@ -174,12 +175,18 @@ class LMSSGraph(rdflib.Graph):
             ]
 
             # get direct parents
-            parents = [str(parent) for parent in self.objects(concept, RDFS.subClassOf)
-                       if str(parent).startswith("http://lmss.sali.org/")]
+            parents = [
+                str(parent)
+                for parent in self.objects(concept, RDFS.subClassOf)
+                if str(parent).startswith("http://lmss.sali.org/")
+            ]
 
             # get direct children
-            children = [str(child) for child in self.subjects(RDFS.subClassOf, concept)
-                        if str(child).startswith("http://lmss.sali.org/")]
+            children = [
+                str(child)
+                for child in self.subjects(RDFS.subClassOf, concept)
+                if str(child).startswith("http://lmss.sali.org/")
+            ]
 
             # build the dictionary to store the concept
             self.concepts[iri] = {
@@ -372,6 +379,17 @@ class LMSSGraph(rdflib.Graph):
             set[str]: The list of Industry IRIs.
         """
         return self.get_children(self.key_concepts["Industry"], max_depth)
+
+    def get_languages(self, max_depth: int | None = None) -> set[str]:
+        """Get the list of Languages.
+
+        Args:
+            max_depth (int): The maximum depth to recurse. Defaults to 8.
+
+        Returns:
+            set[str]: The list of Language IRIs.
+        """
+        return self.get_children(self.key_concepts["Language"], max_depth)
 
     def get_lmss_types(self, max_depth: int | None = None) -> set[str]:
         """Get the list of LMSS Types.
@@ -618,7 +636,8 @@ class LMSSGraph(rdflib.Graph):
                     min(
                         rapidfuzz.fuzz.partial_token_set_ratio(
                             search_term.lower(), definition.lower()
-                        ) / 100.
+                        )
+                        / 100.0
                         for definition in concept["definitions"]
                     )
                     if len(concept["definitions"]) > 0
