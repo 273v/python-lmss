@@ -25,6 +25,32 @@ from rdflib.namespace import RDF, RDFS, SKOS, OWL
 import lmss.owl
 
 
+def stopword(text: str) -> str:
+    """This is a hacked replacement for Kelvin NLP stopwording in the MIT release.
+
+    Args:
+        text (str): The text to be stopworded.
+
+    Returns:
+        str: The stopworded text.
+    """
+    return (
+        text.replace(" and ", " ")
+        .replace(" or ", " ")
+        .replace(" of ", " ")
+        .replace(" the ", " ")
+        .replace(" a ", " ")
+        .replace(" an ", " ")
+        .replace(" to ", " ")
+        .replace(" in ", " ")
+        .replace(" for ", " ")
+        .replace(" on ", " ")
+        .replace(" by ", " ")
+        .replace(" with ", " ")
+        .replace(" law ", " ")
+    )
+
+
 # pylint: disable=R0903,R0904
 class LMSSGraph(rdflib.Graph):
     """LMSSGraph is a wrapper around rdflib.Graph that provides a convenient, efficient, OOP interface for
@@ -119,6 +145,7 @@ class LMSSGraph(rdflib.Graph):
             "Forums and Venues": "http://lmss.sali.org/RBjHwNNG2ASVmasLFU42otk",
             "Governmental Body": "http://lmss.sali.org/RBQGborh1CfXanGZipDL0Qo",
             "Industry": "http://lmss.sali.org/RDIwFaFcH4KY0gwEY0QlMTp",
+            "Language": "http://lmss.sali.org/RDOvAHsvY8TKJ1O1orXPM9o",
             "LMSS Type": "http://lmss.sali.org/R8uI6AZ9vSgpAdKmfGZKfTZ",
             "Legal Authorities": "http://lmss.sali.org/RC1CZydjfH8oiM4W3rCkma3",
             "Legal Entity": "http://lmss.sali.org/R7L5eLIzH0CpOUE74uJvSjL",
@@ -180,10 +207,18 @@ class LMSSGraph(rdflib.Graph):
             ]
 
             # get direct parents
-            parents = [str(parent) for parent in self.objects(concept, RDFS.subClassOf)]
+            parents = [
+                str(parent)
+                for parent in self.objects(concept, RDFS.subClassOf)
+                if str(parent).startswith("http://lmss.sali.org/")
+            ]
 
             # get direct children
-            children = [str(child) for child in self.subjects(RDFS.subClassOf, concept)]
+            children = [
+                str(child)
+                for child in self.subjects(RDFS.subClassOf, concept)
+                if str(child).startswith("http://lmss.sali.org/")
+            ]
 
             # build the dictionary to store the concept
             self.concepts[iri] = {
@@ -378,6 +413,17 @@ class LMSSGraph(rdflib.Graph):
         """
         return self.get_children(self.key_concepts["Industry"], max_depth)
 
+    def get_languages(self, max_depth: int | None = None) -> set[str]:
+        """Get the list of Languages.
+
+        Args:
+            max_depth (int): The maximum depth to recurse. Defaults to 8.
+
+        Returns:
+            set[str]: The list of Language IRIs.
+        """
+        return self.get_children(self.key_concepts["Language"], max_depth)
+
     def get_lmss_types(self, max_depth: int | None = None) -> set[str]:
         """Get the list of LMSS Types.
 
@@ -569,16 +615,25 @@ class LMSSGraph(rdflib.Graph):
             if concept["exact"]:
                 concept["distance"] = 0
             else:
-                concept["distance"] = (
-                    min(
+                if len(concept_labels) > 0:
+                    distance1 = min(
                         DamerauLevenshtein.normalized_distance(
-                            search_term.lower(), label.lower()
+                            stopword(search_term.lower()), stopword(label.lower())
                         )
                         for label in concept_labels
                     )
-                    if len(concept_labels) > 0
-                    else 999
-                )
+
+                    distance2 = min(
+                        rapidfuzz.fuzz.token_set_ratio(
+                            stopword(search_term.lower()), stopword(label.lower())
+                        )
+                        / 100.0
+                        for label in concept_labels
+                    )
+
+                    concept["distance"] = min(distance1, 1.0 - distance2)
+                else:
+                    concept["distance"] = 1.0
 
         # sort by distance and return the top 10
         return sorted(
@@ -623,14 +678,16 @@ class LMSSGraph(rdflib.Graph):
                     for definition in concept["definitions"]
                 )
                 concept["distance"] = (
-                    min(
+                    1.0
+                    - min(
                         rapidfuzz.fuzz.partial_token_set_ratio(
-                            search_term.lower(), definition.lower()
+                            stopword(search_term.lower()), stopword(definition.lower())
                         )
+                        / 100.0
                         for definition in concept["definitions"]
                     )
                     if len(concept["definitions"]) > 0
-                    else 0
+                    else 1.0
                 )
             else:
                 concept["exact"] = False
