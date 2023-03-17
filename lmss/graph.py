@@ -25,6 +25,32 @@ from rdflib.namespace import RDF, RDFS, SKOS, OWL
 import lmss.owl
 
 
+def stopword(text: str) -> str:
+    """This is a hacked replacement for Kelvin NLP stopwording in the MIT release.
+
+    Args:
+        text (str): The text to be stopworded.
+
+    Returns:
+        str: The stopworded text.
+    """
+    return (
+        text.replace(" and ", " ")
+        .replace(" or ", " ")
+        .replace(" of ", " ")
+        .replace(" the ", " ")
+        .replace(" a ", " ")
+        .replace(" an ", " ")
+        .replace(" to ", " ")
+        .replace(" in ", " ")
+        .replace(" for ", " ")
+        .replace(" on ", " ")
+        .replace(" by ", " ")
+        .replace(" with ", " ")
+        .replace(" law ", " ")
+    )
+
+
 # pylint: disable=R0903,R0904
 class LMSSGraph(rdflib.Graph):
     """LMSSGraph is a wrapper around rdflib.Graph that provides a convenient, efficient, OOP interface for
@@ -579,28 +605,25 @@ class LMSSGraph(rdflib.Graph):
             if concept["exact"]:
                 concept["distance"] = 0
             else:
-                distance1 = (
-                    1.0 - min(
+                if len(concept_labels) > 0:
+                    distance1 = min(
                         DamerauLevenshtein.normalized_distance(
-                            search_term.lower(), label.lower()
+                            stopword(search_term.lower()), stopword(label.lower())
                         )
                         for label in concept_labels
                     )
-                    if len(concept_labels) > 0
-                    else 1.0
-                )
 
-                distance2 = 1.0 - (
-                    min(
-                        rapidfuzz.fuzz.partial_token_set_ratio(
-                            search_term.lower(), label.lower()
-                        ) / 100.
+                    distance2 = min(
+                        rapidfuzz.fuzz.token_set_ratio(
+                            stopword(search_term.lower()), stopword(label.lower())
+                        )
+                        / 100.0
                         for label in concept_labels
-                    ) if len(concept_labels) > 0
-                    else 1.0
-                )
+                    )
 
-                concept["distance"] = min(distance1, distance2)
+                    concept["distance"] = min(distance1, 1.0 - distance2)
+                else:
+                    concept["distance"] = 1.0
 
         # sort by distance and return the top 10
         return sorted(
@@ -645,9 +668,10 @@ class LMSSGraph(rdflib.Graph):
                     for definition in concept["definitions"]
                 )
                 concept["distance"] = (
-                    1.0 - min(
+                    1.0
+                    - min(
                         rapidfuzz.fuzz.partial_token_set_ratio(
-                            search_term.lower(), definition.lower()
+                            stopword(search_term.lower()), stopword(definition.lower())
                         )
                         / 100.0
                         for definition in concept["definitions"]
@@ -665,10 +689,3 @@ class LMSSGraph(rdflib.Graph):
             samples.values(),
             key=lambda x: (-x["exact"], -x["substring"], -x["distance"]),
         )[:num_results]
-
-
-if __name__ == "__main__":
-    lmss_graph = LMSSGraph()
-
-    for result in lmss_graph.search_labels("Negligent Misrepresentation"):
-        print(result['label'], result['distance'])

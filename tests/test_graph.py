@@ -48,6 +48,7 @@ def test_graph_search_labels():
                                        concept_type=lmss_graph.key_concepts["Area of Law"],
                                        concept_depth=1)
     assert results[0]["label"] != "Admiralty and Maritime Law"
+    print(results[0])
     assert results[0]["distance"] > 0.0
 
 
