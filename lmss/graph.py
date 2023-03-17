@@ -155,6 +155,12 @@ class LMSSGraph(rdflib.Graph):
                 self.label_to_iri[label] = []
             self.label_to_iri[label].append(iri)
 
+            # get the list of skos:prefLabel string literal values
+            pref_labels = [
+                pref_label.toPython()
+                for pref_label in self.objects(concept, SKOS.prefLabel)
+            ]
+
             # get the list of all skos:altLabel string literal values
             alt_labels = [
                 alt_label.toPython()
@@ -183,6 +189,7 @@ class LMSSGraph(rdflib.Graph):
             self.concepts[iri] = {
                 "iri": iri,
                 "label": label,
+                "pref_labels": pref_labels,
                 "alt_labels": alt_labels,
                 "hidden_labels": hidden_labels,
                 "definitions": definitions,
@@ -534,6 +541,9 @@ class LMSSGraph(rdflib.Graph):
             concept_labels = []
             if concept["label"]:
                 concept_labels.append(concept["label"])
+
+            if concept["pref_labels"]:
+                concept_labels.extend(concept["pref_labels"])
 
             if include_alt_labels and concept["alt_labels"]:
                 concept_labels.extend(concept["alt_labels"])

@@ -50,6 +50,12 @@ def test_graph_search_labels():
     assert results[0]["label"] != "Admiralty and Maritime Law"
     assert results[0]["distance"] > 0.0
 
+    # do the same with short hidden label
+    results = lmss_graph.search_labels("USPS")
+    print(results)
+    assert results[0]["label"] == "U.S. Postal Service"
+    assert results[0]["distance"] == 0.0
+
 
 def test_graph_search_definitions():
     # load the LMSS ontology from the local cache
