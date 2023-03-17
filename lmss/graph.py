@@ -579,16 +579,28 @@ class LMSSGraph(rdflib.Graph):
             if concept["exact"]:
                 concept["distance"] = 0
             else:
-                concept["distance"] = (
-                    min(
+                distance1 = (
+                    1.0 - min(
                         DamerauLevenshtein.normalized_distance(
                             search_term.lower(), label.lower()
                         )
                         for label in concept_labels
                     )
                     if len(concept_labels) > 0
-                    else 999
+                    else 1.0
                 )
+
+                distance2 = 1.0 - (
+                    min(
+                        rapidfuzz.fuzz.partial_token_set_ratio(
+                            search_term.lower(), label.lower()
+                        ) / 100.
+                        for label in concept_labels
+                    ) if len(concept_labels) > 0
+                    else 1.0
+                )
+
+                concept["distance"] = min(distance1, distance2)
 
         # sort by distance and return the top 10
         return sorted(
@@ -633,7 +645,7 @@ class LMSSGraph(rdflib.Graph):
                     for definition in concept["definitions"]
                 )
                 concept["distance"] = (
-                    min(
+                    1.0 - min(
                         rapidfuzz.fuzz.partial_token_set_ratio(
                             search_term.lower(), definition.lower()
                         )
@@ -641,7 +653,7 @@ class LMSSGraph(rdflib.Graph):
                         for definition in concept["definitions"]
                     )
                     if len(concept["definitions"]) > 0
-                    else 0
+                    else 1.0
                 )
             else:
                 concept["exact"] = False
@@ -653,3 +665,10 @@ class LMSSGraph(rdflib.Graph):
             samples.values(),
             key=lambda x: (-x["exact"], -x["substring"], -x["distance"]),
         )[:num_results]
+
+
+if __name__ == "__main__":
+    lmss_graph = LMSSGraph()
+
+    for result in lmss_graph.search_labels("Negligent Misrepresentation"):
+        print(result['label'], result['distance'])
