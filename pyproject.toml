@@ -12,6 +12,7 @@ rdflib = "^6.2.0"
 httpx = {extras = ["http2"], version = "^0.23.3"}
 lxml = "^4.9.2"
 rapidfuzz = "^2.13.7"
+networkx = "^3.0"
 
 
 [tool.poetry.group.dev.dependencies]
