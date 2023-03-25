@@ -173,6 +173,7 @@ class LMSSGraph(rdflib.Graph):
             "Status": "http://lmss.sali.org/Rx69EnEj3H3TpcgTfUSoYx",
             "System Identifiers": "http://lmss.sali.org/R8EoZh39tWmXCkmP2Xzjl6E",
         }
+        self.key_concept_subgraphs: dict[str, set[str]] = {}
 
         # initialize the graph by doing a forward pass on all nodes and building basic trees
         self._init_graph()
@@ -243,6 +244,7 @@ class LMSSGraph(rdflib.Graph):
                 "alt_labels": alt_labels,
                 "hidden_labels": hidden_labels,
                 "definitions": definitions,
+                "top_concept": None,
                 "parents": parents,
                 "children": children,
             }
@@ -253,6 +255,15 @@ class LMSSGraph(rdflib.Graph):
                 if parent not in self.edges:
                     self.edges[parent] = []
                 self.edges[parent].append(concept["iri"])
+
+        # build the key concept subgraphs
+        for concept_label, concept_iri in self.key_concepts.items():
+            # set subgraph
+            self.key_concept_subgraphs[concept_label] = self.get_children(concept_iri)
+
+            # set top concept for all
+            for iri in self.key_concept_subgraphs[concept_label]:
+                self.concepts[iri]["top_concept"] = concept_label
 
     def generate_iri(self, max_tries: int = 10) -> str:
         """Generate a new IRI and ensure it is unique.
