@@ -6,18 +6,24 @@ The LMSSGraph class supports the following methods:
 * listing certain types of concepts
 * querying the ontology for concepts based on label or definition
 * querying the ontology for concepts based on basic relationships
+* adding new concepts to the ontology (TODO: track this with class vs. instance/individual updates)
 """
 
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2023 273 Ventures, LLC
 
 # imports
+import base64
 import importlib.resources
+import uuid
 from pathlib import Path
 
 # packages
-from rapidfuzz.distance import DamerauLevenshtein
 import rapidfuzz.fuzz
+from rapidfuzz.distance import DamerauLevenshtein
+
+# rdflib imports
+import rdflib
 import rdflib.resource
 from rdflib.namespace import RDF, RDFS, SKOS, OWL
 
@@ -49,6 +55,15 @@ def stopword(text: str) -> str:
         .replace(" with ", " ")
         .replace(" law ", " ")
     )
+
+
+def get_iri_uuid() -> str:
+    """Get a random UUID in Base64 to use as an IRI suffix.
+
+    Returns:
+        str: The random UUID in Base64.
+    """
+    return base64.urlsafe_b64encode(uuid.uuid4().bytes).decode("utf-8").rstrip("=")
 
 
 # pylint: disable=R0903,R0904
@@ -238,6 +253,26 @@ class LMSSGraph(rdflib.Graph):
                 if parent not in self.edges:
                     self.edges[parent] = []
                 self.edges[parent].append(concept["iri"])
+
+    def generate_iri(self, max_tries: int = 10) -> str:
+        """Generate a new IRI and ensure it is unique.
+
+        Args:
+            max_tries (int, optional): The maximum number of tries to generate a unique IRI. Defaults to 10.
+
+        Returns:
+            str: The new IRI.
+        """
+        # first try
+        iri = f"http://lmss.sali.org/R{get_iri_uuid()}"
+
+        # inf loop protection, just in case
+        tries = 0
+        while iri in self.concepts:
+            if tries >= max_tries:
+                raise RuntimeError("Could not generate a unique IRI.")
+            iri = f"http://lmss.sali.org/R{get_iri_uuid()}"
+        return iri
 
     def get_key_concepts(self) -> set[str]:
         """Get the list of top-level concepts based on the class dict.  Note that some
@@ -548,6 +583,95 @@ class LMSSGraph(rdflib.Graph):
             set[str]: The list of System Identifier IRIs.
         """
         return self.get_children(self.key_concepts["System Identifiers"], max_depth)
+
+    # pylint: disable=R0913
+    def add_concept(
+        self,
+        label: str,
+        parent: str | list[str],
+        pref_labels: list[str] | None = None,
+        alt_labels: list[str] | None = None,
+        hidden_labels: list[str] | None = None,
+        definitions: list[str] | None = None,
+    ) -> str:
+        """Add a new concept to the ontology.
+
+        Since this class inherits from rdflib.Graph, we're really just wrapping it and making
+        sure to update downstream data structures.  There isn't a strict standard for the
+        way that the ontology is structured, so this will need to evolve as more standardization
+        evolves.
+
+        Args:
+            label (str): The rdfs:label for the new concept.
+            parent (str | list[str]): The IRI of the parent concept(s).
+            pref_labels (list[str], optional): The skos:prefLabel(s) for the new concept.
+                Defaults to None.
+            alt_labels (list[str], optional): The skos:altLabel(s) for the new concept.
+                Defaults to None.
+            hidden_labels (list[str], optional): The skos:hiddenLabel(s) for the new concept.
+                Defaults to None.
+            definitions (list[str], optional): The skos:definition(s) for the new concept.
+                Defaults to None.
+
+        Returns:
+            str: The IRI of the new concept.
+        """
+
+        # set up the URIRef for the new concept
+        new_iri = self.generate_iri()
+        new_concept = rdflib.URIRef(new_iri)
+
+        # set as RDF.type as OWL.Class
+        self.add((new_concept, RDF.type, OWL.Class))
+
+        # add rdfs:label
+        self.add((new_concept, RDFS.label, rdflib.Literal(label)))
+
+        # add skos:prefLabel
+        if pref_labels is None:
+            pref_labels = [label]
+        for pref_label in pref_labels:
+            self.add((new_concept, SKOS.prefLabel, rdflib.Literal(pref_label)))
+
+        # add skos:altLabel
+        if alt_labels is not None:
+            for alt_label in alt_labels:
+                self.add((new_concept, SKOS.altLabel, rdflib.Literal(alt_label)))
+
+        # add skos:hiddenLabel
+        if hidden_labels is not None:
+            for hidden_label in hidden_labels:
+                self.add((new_concept, SKOS.hiddenLabel, rdflib.Literal(hidden_label)))
+
+        # add skos:definition
+        if definitions is not None:
+            for definition in definitions:
+                self.add((new_concept, SKOS.definition, rdflib.Literal(definition)))
+
+        # add subClassOf relationship for each parent
+        if isinstance(parent, str):
+            parent = [parent]
+
+        for p in parent:
+            self.add((new_concept, RDFS.subClassOf, rdflib.URIRef(p)))
+
+        # add the concept to the concept with these fields:
+        self.concepts[new_iri] = {
+            "iri": new_iri,
+            "label": label,
+            "pref_labels": pref_labels,
+            "alt_labels": alt_labels,
+            "hidden_labels": hidden_labels,
+            "definitions": definitions,
+            "parents": parent,
+            "children": [],
+        }
+
+        # add the concept to the parent's children
+        for p in parent:
+            self.concepts[p]["children"].append(new_iri)
+
+        return new_iri
 
     def search_labels(
         self,
