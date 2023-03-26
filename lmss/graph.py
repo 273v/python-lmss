@@ -663,8 +663,8 @@ class LMSSGraph(rdflib.Graph):
         if isinstance(parent, str):
             parent = [parent]
 
-        for p in parent:
-            self.add((new_concept, RDFS.subClassOf, rdflib.URIRef(p)))
+        for parent_iri in parent:
+            self.add((new_concept, RDFS.subClassOf, rdflib.URIRef(parent_iri)))
 
         # add the concept to the concept with these fields:
         self.concepts[new_iri] = {
@@ -679,8 +679,8 @@ class LMSSGraph(rdflib.Graph):
         }
 
         # add the concept to the parent's children
-        for p in parent:
-            self.concepts[p]["children"].append(new_iri)
+        for parent_iri in parent:
+            self.concepts[parent_iri]["children"].append(new_iri)
 
         return new_iri
 
