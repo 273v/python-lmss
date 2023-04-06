@@ -17,7 +17,9 @@ import lmss.owl
 from lmss.graph import LMSSGraph
 
 
-def diff_graphs(graph1: LMSSGraph, graph2: LMSSGraph, output_format: str = "csv") -> None:
+def diff_graphs(
+    graph1: LMSSGraph, graph2: LMSSGraph, output_format: str = "csv"
+) -> None:
     """Diff two graphs and print the results as either plain text, CSV, or JSON records.
 
     Args:
