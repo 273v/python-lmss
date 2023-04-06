@@ -12,6 +12,10 @@ import csv
 import json
 import sys
 
+# packages
+import rdflib
+
+
 # project imports
 import lmss.owl
 from lmss.graph import LMSSGraph
@@ -53,15 +57,38 @@ def diff_graphs(
     common_iris = g1_iris.intersection(g2_iris)
 
     for iri in common_iris:
-        # get the triples for each
-        for field in graph1.concepts[iri].keys():
-            if graph1.concepts[iri][field] != graph1.concepts[iri][field]:
+        field_union = set(graph1.concepts[iri].keys()).union(
+            set(graph2.concepts[iri].keys())
+        )
+
+        for field in field_union:
+            if field not in graph1.concepts[iri]:
+                diff_list.append(
+                    {
+                        "iri": iri,
+                        "field": field,
+                        "g1": None,
+                        "g2": graph2.concepts[iri][field],
+                        "diff_type": "field",
+                    }
+                )
+            if field not in graph2.concepts[iri]:
                 diff_list.append(
                     {
                         "iri": iri,
                         "field": field,
                         "g1": graph1.concepts[iri][field],
-                        "g2": graph1.concepts[iri][field],
+                        "g2": None,
+                        "diff_type": "field",
+                    }
+                )
+            if graph1.concepts[iri][field] != graph2.concepts[iri][field]:
+                diff_list.append(
+                    {
+                        "iri": iri,
+                        "field": field,
+                        "g1": graph1.concepts[iri][field],
+                        "g2": graph2.concepts[iri][field],
                         "diff_type": "field",
                     }
                 )
@@ -78,6 +105,68 @@ def diff_graphs(
     elif output_format == "csv":
         writer = csv.DictWriter(
             sys.stdout, fieldnames=["iri", "field", "g1", "g2", "diff_type"]
+        )
+        writer.writeheader()
+        writer.writerows(diff_list)
+    elif output_format == "json":
+        print(json.dumps(diff_list, indent=4))
+
+
+def diff_triples(
+    graph1: LMSSGraph, graph2: LMSSGraph, output_format: str = "csv"
+) -> None:
+    """Diff two triple sets and print the results as either plain text, CSV, or JSON records.
+
+    Args:
+        graph1 (LMSSGraph): The first graph.
+        graph1 (LMSSGraph): The second graph.
+        output_format (str): The output format. One of "csv", "json", or "text".
+    """
+
+    # store diff findings
+    diff_list = []
+
+    # create a set of all tuples on both sides
+    g1_triples = set(graph1.triples((None, None, None)))
+    g2_triples = set(graph2.triples((None, None, None)))
+
+    # get the triples that are only in one
+    g1_only_triples = g1_triples.difference(g2_triples)
+    g2_only_triples = g2_triples.difference(g1_triples)
+
+    for triple in g1_only_triples:
+        diff_list.append(
+            {
+                "subject": triple[0],
+                "predicate": triple[1],
+                "object": triple[2],
+                "g1": True,
+                "g2": False,
+                "diff_type": "triple",
+            }
+        )
+
+    for triple in g2_only_triples:
+        diff_list.append(
+            {
+                "subject": triple[0],
+                "predicate": triple[1],
+                "object": triple[2],
+                "g1": False,
+                "g2": True,
+                "diff_type": "triple",
+            }
+        )
+
+    # print as requested format
+    if output_format == "text":
+        for diff in diff_list:
+            print(
+                f"Subject={diff['subject']}, Predicate={diff['predicate']}, Object={diff['object']}: {'only' if diff['g1'] else 'not'} in g1"
+            )
+    elif output_format == "csv":
+        writer = csv.DictWriter(
+            sys.stdout, fieldnames=["subject", "predicate", "object", "g1", "g2", "diff_type"]
         )
         writer.writeheader()
         writer.writerows(diff_list)
@@ -127,6 +216,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Diff two LMSS graphs.")
     parser.add_argument("g1", type=str, help="branch=[branch] or file=/path/to/file")
     parser.add_argument("g2", type=str, help="branch=[branch] or file=/path/to/file")
+    parser.add_argument("--triples", action="store_true", help="Diff triples instead of concepts")
     parser.add_argument(
         "--format", type=str, default="text", help="Output format: csv, json, or text"
     )
@@ -139,4 +229,7 @@ if __name__ == "__main__":
     lmss_graph2 = get_graph_from_arg(args.g2)
 
     # diff the graphs
-    diff_graphs(lmss_graph1, lmss_graph2, output_format=args.format)
+    if args.triples:
+        diff_triples(lmss_graph1, lmss_graph2, output_format=args.format)
+    else:
+        diff_graphs(lmss_graph1, lmss_graph2, output_format=args.format)
