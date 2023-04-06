@@ -25,6 +25,7 @@ from rapidfuzz.distance import DamerauLevenshtein
 # rdflib imports
 import rdflib
 import rdflib.resource
+from rdflib import URIRef
 from rdflib.namespace import RDF, RDFS, SKOS, OWL
 
 # lmss imports
@@ -284,6 +285,60 @@ class LMSSGraph(rdflib.Graph):
                 raise RuntimeError("Could not generate a unique IRI.")
             iri = f"http://lmss.sali.org/R{get_iri_uuid()}"
         return iri
+
+    def reset_iri(self, iri: str) -> str:
+        """Reset an IRI rdf:about attribute to a new unique value using rdflib.
+
+        Args:
+            iri (str): The IRI to reset.
+
+        Returns:
+            The new IRI.
+        """
+        # find the triplet, remove it, and replace it with the new one
+        new_uri = self.generate_iri()
+
+        for subj, pred, obj in self.triples((URIRef(iri), None, None)):  # pylint: disable=E1133
+            self.remove((subj, pred, obj))
+            self.add((URIRef(new_uri), pred, obj))
+
+        for subj, pred, obj in self.triples((None, None, URIRef(iri))):  # pylint: disable=E1133
+            self.remove((subj, pred, obj))
+            self.add((subj, pred, URIRef(new_uri)))
+
+        # update the concept dict
+        self.concepts[new_uri] = self.concepts.pop(iri)
+        self.concepts[new_uri]["iri"] = new_uri
+
+        # update the iri->label and label->iri maps
+        self.iri_to_label[new_uri] = self.iri_to_label.pop(iri)
+        for label in self.label_to_iri:
+            self.label_to_iri[label] = [
+                new_uri if x == iri else x for x in self.label_to_iri[label]
+            ]
+
+        # update the edges
+        try:
+            self.edges[new_uri] = self.edges.pop(iri)
+        except KeyError:
+            pass
+
+        for parent in self.edges:
+            try:
+                self.edges[parent] = [
+                    new_uri if x == iri else x for x in self.edges[parent]
+                ]
+            except KeyError:
+                pass
+
+        # update the key concept subgraphs
+        for concept_label in self.key_concept_subgraphs:
+            self.key_concept_subgraphs[concept_label] = {
+                    new_uri if x == iri else x
+                    for x in self.key_concept_subgraphs[concept_label]
+                }
+
+        return new_uri
 
     def get_key_concepts(self) -> set[str]:
         """Get the list of top-level concepts based on the class dict.  Note that some
