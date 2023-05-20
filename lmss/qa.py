@@ -6,6 +6,7 @@ import argparse
 import csv
 import json
 from pathlib import Path
+from xml.etree import ElementTree
 
 # packages
 import networkx
@@ -348,6 +349,50 @@ class LMSSGraphQA:
                         }
                     )
 
+def check_xml_lang_attribs(owl_buffer: bytes) -> list[dict]:
+    """
+    Check for xml:lang attributes in the OWL file
+    """
+
+    findings = []
+
+    # create an ElementTree parser
+    parser = ElementTree.XMLParser()
+
+    # parse the OWL file
+    owl_tree = ElementTree.fromstring(owl_buffer, parser=parser)
+
+    # findall elements with xml:lang attributes using NSMAP
+    for element in owl_tree.iter():
+        # get IRI and label from rdf:about and rdfs:label attributes
+        iri = element.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about", None)
+        label = element.get("{http://www.w3.org/2000/01/rdf-schema#}label", None)
+
+        if iri is None:
+            continue
+
+        for child_element in element.findall(".//*[@xml:lang]", lmss.owl.NSMAP):
+            # get the xml:lang attribute
+            xml_lang = child_element.get("{http://www.w3.org/XML/1998/namespace}lang", None)
+
+            # check if the xml:lang attribute is empty or not a single token
+            if xml_lang is None or len(xml_lang.split()) > 1:
+                # get the element tag
+                element_tag = child_element.tag.split("}")[1]
+
+                # add finding
+                findings.append(
+                    {
+                        "iri": iri,
+                        "label": label,
+                        "tag": child_element.tag,
+                        "description": f"Invalid xml:lang attribute on element {element_tag}: {xml_lang}",
+                        "source": "check_xml_lang_attribs",
+                    }
+                )
+
+    return findings
+
 
 if __name__ == "__main__":
     # setup arguments as optional for owl file, owl branch
@@ -360,6 +405,12 @@ if __name__ == "__main__":
         "--owl-repo-url",
         help="URL to GitHub repo for OWL file",
         default=lmss.owl.DEFAULT_REPO_ARTIFACT_URL,
+    )
+
+    parser.add_argument(
+        "--check-xml-lang",
+        help="Check for xml:lang attributes in the OWL file",
+        action="store_true",
     )
 
     # setup arguments for check types
@@ -404,30 +455,47 @@ if __name__ == "__main__":
     # parse arguments
     args = parser.parse_args()
 
-    # setup owl file
-    lmss_qa = LMSSGraphQA(args.owl_file, args.owl_branch)
+    # store all findings
+    all_findings = []
 
     # run checks
-    if not args.disable_rdfs_label:
-        lmss_qa.check_rdfs_label()
-    if not args.disable_skos_pref_label:
-        lmss_qa.check_skos_pref_label()
-    if not args.disable_skos_definition:
-        lmss_qa.check_skos_definition()
-    if not args.disable_label_punctuation:
-        lmss_qa.check_label_punctuation()
-    if not args.disable_duplicate_labels:
-        lmss_qa.check_duplicate_labels()
-    if not args.disable_loops:
-        lmss_qa.check_loops()
+    if args.check_xml_lang:
+        if args.owl_file is None:
+            owl_buffer = lmss.owl.get_lmss_owl()
+        else:
+            owl_buffer = Path(args.owl_file).read_text()
+        xml_lang_findings = check_xml_lang_attribs(owl_buffer)
+        all_findings.extend(xml_lang_findings)
+
+    try:
+        # setup owl file
+        lmss_qa = LMSSGraphQA(args.owl_file, args.owl_branch)
+
+        if not args.disable_rdfs_label:
+            lmss_qa.check_rdfs_label()
+        if not args.disable_skos_pref_label:
+            lmss_qa.check_skos_pref_label()
+        if not args.disable_skos_definition:
+            lmss_qa.check_skos_definition()
+        if not args.disable_label_punctuation:
+            lmss_qa.check_label_punctuation()
+        if not args.disable_duplicate_labels:
+            lmss_qa.check_duplicate_labels()
+        if not args.disable_loops:
+            lmss_qa.check_loops()
+
+        # add findings to all findings
+        all_findings.extend(lmss_qa.findings)
+    except Exception as e:
+        print(f"Error running LMSSGraph checks: {e}")
 
     # sort by IRI by default
-    lmss_qa.findings.sort(key=lambda x: x["iri"])
+    all_findings.sort(key=lambda x: x["iri"])
 
     # output findings
     if args.output == "-":
         # output to stdout line by line in human-readable format
-        for finding in lmss_qa.findings:
+        for finding in all_findings:
             print(
                 f"{finding['iri']} : ({finding['label']}) : {finding['source']} : {finding['description']}"
             )
@@ -437,7 +505,7 @@ if __name__ == "__main__":
                 output_file, fieldnames=["iri", "label", "description", "source"]
             )
             writer.writeheader()
-            writer.writerows(lmss_qa.findings)
+            writer.writerows(all_findings)
     elif args.output.lower().endswith("json"):
         with open(args.output, "wt", encoding="utf-8") as output_file:
-            json.dump(lmss_qa.findings, output_file, indent=2)
+            json.dump(all_findings, output_file, indent=2)
