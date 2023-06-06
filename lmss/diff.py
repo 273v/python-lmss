@@ -82,7 +82,21 @@ def diff_graphs(
                         "diff_type": "field",
                     }
                 )
-            if graph1.concepts[iri][field] != graph2.concepts[iri][field]:
+
+            # if it's the children field, compare the sets, not ordered lists
+            elif field == "children":
+                if set(graph1.concepts[iri][field]) != set(graph2.concepts[iri][field]):
+                    diff_list.append(
+                        {
+                            "iri": iri,
+                            "field": field,
+                            "g1": graph1.concepts[iri][field],
+                            "g2": graph2.concepts[iri][field],
+                            "diff_type": "field",
+                        }
+                    )
+            # otherwise, compare the values
+            elif graph1.concepts[iri][field] != graph2.concepts[iri][field]:
                 diff_list.append(
                     {
                         "iri": iri,
