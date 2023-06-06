@@ -8,6 +8,7 @@
 
 # imports
 import argparse
+import json
 import os
 import re
 from pathlib import Path
@@ -15,13 +16,20 @@ from pathlib import Path
 # packages
 import openai
 from rdflib import URIRef, Literal
-from rdflib.namespace import RDFS, SKOS
+from rdflib.namespace import RDF, RDFS, OWL, SKOS
 
 # project
 import lmss.owl
 from lmss.graph import LMSSGraph
 
-openai.api_key = os.getenv("OPENAI_API_KEY", None)
+try:
+    openai.api_key = os.getenv("OPENAI_API_KEY", None)
+    if openai.api_key is None:
+        with open(Path.home() / ".openai" / "api_key") as api_key_file:
+            openai.api_key = api_key_file.read().strip()
+except Exception:
+    openai.api_key = None
+
 
 # regular expression to extract parenthetical text
 PARENTHETICAL_REGEX = re.compile(r"\((.*?)\)", re.UNICODE)
@@ -103,6 +111,37 @@ Description: {top_concept_description}
         user_prompt += f"Children: {', '.join(child_labels)}\n"
 
     user_prompt += "</CONCEPT>\n"
+
+    return system_prompt, user_prompt
+
+
+def get_translation_prompt(
+        term: str,
+        target_langs: list[str],
+        source_lang: str = "en",
+) -> tuple[str, str]:
+    """Get the system and user prompts for a concept definition.
+
+    Args:
+        term (str): The term to translate.
+        target_langs (list[str]): The target languages.
+        source_lang (str): The source language.
+
+    Returns:
+        tuple[str, str]: The system and user prompts.
+    """
+    # get the prompt to send to the LLM
+    system_prompt = """You are a legal knowledge management professional who works with ontologies.
+    Please perform the following tasks:
+    1. Translate the term <TERM> from <SOURCE_LANG> to each <TARGET_LANG> listed in ISO 639-1 format.
+    2. Respond only with the list of translation in JSON.
+    3. Do not include any heading or other text.
+    """
+
+    user_prompt = f"""<TERM>{term}</TERM>\n"""
+    user_prompt += f"<SOURCE_LANG>{source_lang}</SOURCE_LANG>\n"
+    user_prompt += "<TARGET_LANG>" + ", ".join(target_langs) + "</TARGET_LANG>\n"
+    user_prompt += "JSON:"
 
     return system_prompt, user_prompt
 
@@ -253,6 +292,81 @@ def correct_labels(lmss_graph: LMSSGraph) -> LMSSGraph:
     return lmss_graph
 
 
+def translate_concepts(graph: LMSSGraph, concept_set: set[str], target_langs: list[str], progress: bool = True) -> list[dict]:
+    """Translate the labels and definitions from en(-US) to one or more
+     ISO 639-1 language codes, such as es-ES, de-DE, or en-UK.
+
+    Args:
+        graph: The LMSSGraph object.
+        concept_set: The set of concepts to translate.
+        target_langs: The target language(s) to translate to.
+        progress: Whether to show a progress bar.
+
+    Returns:
+        Graph: The graph enriched with translations for labels and definitions.
+    """
+    result_data: list[dict] = []
+
+    # iterate through concepts
+    subjects = [s for s in
+                g.subjects(RDF.type, OWL.Class)
+                if str(s) in concept_set]
+
+    if progress:
+        try:
+            import tqdm  # pylint: disable=C0415
+
+            subjects = tqdm.tqdm(subjects, desc="Translating concepts")
+        except ImportError:
+            pass
+
+    for concept in subjects:
+        # check if the IRI is in the concept set
+        try:
+            iri = str(concept)
+            if iri not in concept_set:
+                continue
+
+            # get rdfs:label and prefLabel
+            label = g.value(concept, RDFS.label)
+            record = {
+                "iri": iri,
+                "rdfs:label": str(label)
+            }
+
+            if label is not None:
+                system_prompt, user_prompt = get_translation_prompt(label, target_langs)
+
+                # get the definition with ChatCompletion API
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo-0301",
+                    temperature=0.0,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                )
+
+                # get the definition
+                if len(response["choices"]) > 0:
+                    try:
+                        raw_response = response["choices"][0]["message"]["content"].strip()
+                        json_response = json.loads(raw_response)
+                        for lang_code in json_response:
+                            if lang_code in target_langs:
+                                record[lang_code] = json_response[lang_code]
+                    except json.decoder.JSONDecodeError:
+                        pass
+
+                if len(record) > 2:
+                    result_data.append(record)
+        except Exception as e:
+            print(iri, e)
+            continue
+
+    return result_data
+
+
 if __name__ == "__main__":
     # setup argparser
     parser = argparse.ArgumentParser(description="Enrich LMSS OWL file.")
@@ -321,7 +435,7 @@ if __name__ == "__main__":
     # get the openai key
     if openai.api_key is None:
         if not args.openai_key_path.exists():
-            raise RuntimeError("Unable to set OpenAI key from $OPENAI_API_KEY or file.")
+            raise RuntimeError("Unable to set OpenAI key from $OPENAI_API_KEY orfile.")
 
         with open(args.openai_key_path, "rt", encoding="utf-8") as f:
             openai.api_key = f.read().strip()
