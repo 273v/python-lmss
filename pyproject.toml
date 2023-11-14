@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lmss"
-version = "0.1.2"
+version = "0.1.3"
 description = "Legal Matter Standard Specification (LMSS)"
 authors = ["273 Ventures <opensource@273ventures.com>"]
 license = "MIT"
